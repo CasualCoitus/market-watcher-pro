@@ -1,28 +1,35 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePositions } from '@/hooks/usePositions';
-import { formatPrice, formatPercent } from '@/lib/indicators';
+import { formatPrice } from '@/lib/indicators';
 import { format } from 'date-fns';
+import { Position } from '@/types/trading';
+import { PositionDetailsDialog } from './PositionDetailsDialog';
 import { 
   Briefcase, 
   TrendingUp, 
   TrendingDown,
   Loader2,
   Target,
-  AlertTriangle
+  AlertTriangle,
+  ExternalLink
 } from 'lucide-react';
 
 export function PositionsPanel() {
+  const [selectedPosition, setSelectedPosition] = useState<Position | null>(null);
   const { positions, closedPositions, isLoading } = usePositions();
 
   const totalPnL = positions.reduce((sum, p) => sum + (p.unrealized_pnl || 0), 0);
 
-  const renderPosition = (position: typeof positions[0], isOpen: boolean) => (
+  const renderPosition = (position: Position, isOpen: boolean) => (
     <div
       key={position.id}
-      className="p-3 rounded-lg border bg-card"
+      className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
+      onClick={() => isOpen && setSelectedPosition(position)}
     >
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
@@ -34,18 +41,25 @@ export function PositionsPanel() {
             </Badge>
           )}
         </div>
-        <Badge 
-          variant={
-            (position.unrealized_pnl ?? 0) >= 0 ? 'default' : 'destructive'
-          }
-        >
-          {(position.unrealized_pnl ?? 0) >= 0 ? (
-            <TrendingUp className="h-3 w-3 mr-1" />
-          ) : (
-            <TrendingDown className="h-3 w-3 mr-1" />
+        <div className="flex items-center gap-2">
+          <Badge 
+            variant={
+              (position.unrealized_pnl ?? 0) >= 0 ? 'default' : 'destructive'
+            }
+          >
+            {(position.unrealized_pnl ?? 0) >= 0 ? (
+              <TrendingUp className="h-3 w-3 mr-1" />
+            ) : (
+              <TrendingDown className="h-3 w-3 mr-1" />
+            )}
+            {formatPrice(position.unrealized_pnl)}
+          </Badge>
+          {isOpen && (
+            <Button variant="ghost" size="icon" className="h-6 w-6">
+              <ExternalLink className="h-3 w-3" />
+            </Button>
           )}
-          {formatPrice(position.unrealized_pnl)}
-        </Badge>
+        </div>
       </div>
       
       <div className="grid grid-cols-2 gap-2 text-sm">
@@ -75,11 +89,17 @@ export function PositionsPanel() {
             <span className="text-xs">SL: {formatPrice(position.stop_loss_price)}</span>
           </div>
         )}
+        {position.take_profit_price && (
+          <div className="flex items-center gap-1">
+            <TrendingUp className="h-3 w-3 text-green-500" />
+            <span className="text-xs">TP: {formatPrice(position.take_profit_price)}</span>
+          </div>
+        )}
       </div>
       
       <div className="mt-2 text-xs text-muted-foreground">
         {isOpen 
-          ? `Opened ${format(new Date(position.opened_at), 'MMM d, HH:mm')}`
+          ? `Opened ${format(new Date(position.opened_at || new Date()), 'MMM d, HH:mm')}`
           : `Closed ${format(new Date(position.closed_at!), 'MMM d, HH:mm')}`
         }
       </div>
@@ -144,6 +164,12 @@ export function PositionsPanel() {
           </TabsContent>
         </Tabs>
       </CardContent>
+
+      <PositionDetailsDialog
+        position={selectedPosition}
+        open={!!selectedPosition}
+        onOpenChange={(open) => !open && setSelectedPosition(null)}
+      />
     </Card>
   );
 }
