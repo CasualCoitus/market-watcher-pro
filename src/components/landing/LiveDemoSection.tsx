@@ -1,7 +1,16 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, Zap, Clock, DollarSign, Activity } from 'lucide-react';
+import { TrendingUp, TrendingDown, Zap, Activity, BarChart3, Clock, ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+
+interface Stock {
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  volume: string;
+  isActive: boolean;
+}
 
 interface Signal {
   id: string;
@@ -11,265 +20,485 @@ interface Signal {
   price: number;
   change: number;
   timestamp: Date;
+  confidence: number;
 }
 
-const SYMBOLS = ['AAPL', 'GOOGL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'AMD'];
-const SIGNAL_TYPES = ['BB Breakout', 'VWAP Cross', 'Mean Reversion', 'Momentum'];
+const STOCKS: Stock[] = [
+  { symbol: 'AAPL', name: 'Apple Inc.', price: 178.42, change: 2.34, volume: '52.3M', isActive: false },
+  { symbol: 'GOOGL', name: 'Alphabet Inc.', price: 141.80, change: -1.23, volume: '28.1M', isActive: false },
+  { symbol: 'MSFT', name: 'Microsoft Corp.', price: 378.91, change: 1.87, volume: '31.2M', isActive: false },
+  { symbol: 'NVDA', name: 'NVIDIA Corp.', price: 875.28, change: 4.52, volume: '45.8M', isActive: false },
+  { symbol: 'TSLA', name: 'Tesla Inc.', price: 248.50, change: -2.18, volume: '89.4M', isActive: false },
+  { symbol: 'META', name: 'Meta Platforms', price: 505.75, change: 3.21, volume: '22.6M', isActive: false },
+];
 
-const generateSignal = (): Signal => {
-  const symbol = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
+const SIGNAL_TYPES = ['BB Breakout', 'VWAP Cross', 'Mean Reversion', 'Momentum Surge', 'Volume Spike'];
+
+const generateSignal = (stock: Stock): Signal => {
   const type = Math.random() > 0.5 ? 'buy' : 'sell';
-  const basePrice = 100 + Math.random() * 400;
-  const change = (Math.random() - 0.5) * 10;
-  
   return {
     id: `${Date.now()}-${Math.random()}`,
-    symbol,
+    symbol: stock.symbol,
     type,
     signalType: SIGNAL_TYPES[Math.floor(Math.random() * SIGNAL_TYPES.length)],
-    price: basePrice,
-    change,
+    price: stock.price,
+    change: stock.change,
     timestamp: new Date(),
+    confidence: 75 + Math.floor(Math.random() * 20),
   };
 };
 
-const SignalCard = ({ signal, index }: { signal: Signal; index: number }) => {
-  const isBuy = signal.type === 'buy';
-  
+const StockCard = ({ 
+  stock, 
+  index, 
+  isActive, 
+  onActivate 
+}: { 
+  stock: Stock; 
+  index: number; 
+  isActive: boolean;
+  onActivate: () => void;
+}) => {
+  const [currentPrice, setCurrentPrice] = useState(stock.price);
+  const [currentChange, setCurrentChange] = useState(stock.change);
+  const [priceFlash, setPriceFlash] = useState<'up' | 'down' | null>(null);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const delta = (Math.random() - 0.5) * 2;
+      setCurrentPrice(prev => {
+        const newPrice = Math.max(1, prev + delta);
+        setPriceFlash(delta > 0 ? 'up' : 'down');
+        setTimeout(() => setPriceFlash(null), 300);
+        return newPrice;
+      });
+      setCurrentChange(prev => prev + (Math.random() - 0.5) * 0.5);
+    }, 1500 + Math.random() * 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const isPositive = currentChange >= 0;
+
   return (
     <motion.div
-      initial={{ opacity: 0, x: -50, scale: 0.8 }}
-      animate={{ opacity: 1, x: 0, scale: 1 }}
-      exit={{ opacity: 0, x: 50, scale: 0.8 }}
-      transition={{ duration: 0.4, delay: index * 0.1 }}
+      initial={{ opacity: 0, y: 30, scale: 0.9 }}
+      animate={{ 
+        opacity: 1, 
+        y: 0, 
+        scale: 1,
+        boxShadow: isActive 
+          ? '0 0 30px rgba(34, 197, 94, 0.3)' 
+          : '0 4px 20px rgba(0, 0, 0, 0.1)'
+      }}
+      transition={{ 
+        duration: 0.5, 
+        delay: index * 0.1,
+        type: 'spring',
+        stiffness: 100
+      }}
+      whileHover={{ scale: 1.02, y: -5 }}
+      onClick={onActivate}
       className={`
-        relative p-4 rounded-xl border backdrop-blur-sm
-        ${isBuy 
-          ? 'bg-success/10 border-success/30 shadow-[0_0_20px_rgba(34,197,94,0.15)]' 
-          : 'bg-destructive/10 border-destructive/30 shadow-[0_0_20px_rgba(239,68,68,0.15)]'
+        relative cursor-pointer p-4 rounded-xl border backdrop-blur-sm transition-all duration-300
+        ${isActive 
+          ? 'bg-primary/10 border-primary/50 ring-2 ring-primary/30' 
+          : 'bg-card/50 border-border/50 hover:border-primary/30'
         }
       `}
     >
-      {/* Pulse effect */}
-      <motion.div
-        initial={{ scale: 1, opacity: 0.5 }}
-        animate={{ scale: 1.5, opacity: 0 }}
-        transition={{ duration: 1, repeat: Infinity }}
-        className={`absolute inset-0 rounded-xl ${isBuy ? 'bg-success/20' : 'bg-destructive/20'}`}
-      />
-      
-      <div className="relative flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-lg ${isBuy ? 'bg-success/20' : 'bg-destructive/20'}`}>
-            {isBuy ? (
-              <TrendingUp className="w-5 h-5 text-success" />
-            ) : (
-              <TrendingDown className="w-5 h-5 text-destructive" />
+      {/* Live indicator */}
+      <div className="absolute top-3 right-3 flex items-center gap-1.5">
+        <motion.div
+          animate={{ scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }}
+          transition={{ duration: 1.5, repeat: Infinity }}
+          className="w-2 h-2 rounded-full bg-success"
+        />
+        <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Live</span>
+      </div>
+
+      {/* Active pulse ring */}
+      {isActive && (
+        <motion.div
+          initial={{ scale: 1, opacity: 0.5 }}
+          animate={{ scale: 1.05, opacity: 0 }}
+          transition={{ duration: 1.5, repeat: Infinity }}
+          className="absolute inset-0 rounded-xl border-2 border-primary"
+        />
+      )}
+
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-lg text-foreground">{stock.symbol}</span>
+            {isActive && (
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="px-1.5 py-0.5 bg-primary/20 rounded text-[10px] text-primary font-medium"
+              >
+                SCANNING
+              </motion.div>
             )}
           </div>
-          
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-foreground">{signal.symbol}</span>
-              <Badge 
-                variant={isBuy ? 'default' : 'destructive'} 
-                className={`text-xs ${isBuy ? 'bg-success hover:bg-success/80' : ''}`}
-              >
-                {signal.type.toUpperCase()}
-              </Badge>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Zap className="w-3 h-3" />
-              <span>{signal.signalType}</span>
-            </div>
+          <span className="text-xs text-muted-foreground">{stock.name}</span>
+        </div>
+      </div>
+
+      <div className="flex items-end justify-between">
+        <div>
+          <motion.div
+            key={currentPrice}
+            initial={{ color: priceFlash === 'up' ? '#22c55e' : priceFlash === 'down' ? '#ef4444' : undefined }}
+            animate={{ color: 'hsl(var(--foreground))' }}
+            transition={{ duration: 0.3 }}
+            className="text-2xl font-mono font-bold"
+          >
+            ${currentPrice.toFixed(2)}
+          </motion.div>
+          <div className={`flex items-center gap-1 text-sm font-medium ${isPositive ? 'text-success' : 'text-destructive'}`}>
+            {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+            <span>{isPositive ? '+' : ''}{currentChange.toFixed(2)}%</span>
           </div>
         </div>
-        
+
         <div className="text-right">
-          <div className="font-mono font-bold text-foreground">
-            ${signal.price.toFixed(2)}
+          <div className="text-xs text-muted-foreground mb-1">Volume</div>
+          <div className="text-sm font-medium text-foreground">{stock.volume}</div>
+        </div>
+      </div>
+
+      {/* Mini chart visualization */}
+      <div className="mt-3 h-8 flex items-end gap-0.5">
+        {Array.from({ length: 20 }).map((_, i) => (
+          <motion.div
+            key={i}
+            initial={{ height: 0 }}
+            animate={{ height: `${20 + Math.random() * 80}%` }}
+            transition={{ duration: 0.5, delay: i * 0.02 }}
+            className={`flex-1 rounded-sm ${isPositive ? 'bg-success/40' : 'bg-destructive/40'}`}
+          />
+        ))}
+      </div>
+    </motion.div>
+  );
+};
+
+const SignalCard = ({ signal, onComplete }: { signal: Signal; onComplete: () => void }) => {
+  const isBuy = signal.type === 'buy';
+
+  useEffect(() => {
+    const timer = setTimeout(onComplete, 4000);
+    return () => clearTimeout(timer);
+  }, [onComplete]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.8, x: -100 }}
+      animate={{ opacity: 1, scale: 1, x: 0 }}
+      exit={{ opacity: 0, scale: 0.8, x: 100 }}
+      transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+      className={`
+        relative p-5 rounded-2xl border-2 backdrop-blur-md
+        ${isBuy 
+          ? 'bg-success/15 border-success/40' 
+          : 'bg-destructive/15 border-destructive/40'
+        }
+      `}
+    >
+      {/* Animated background glow */}
+      <motion.div
+        initial={{ opacity: 0.3 }}
+        animate={{ opacity: [0.3, 0.6, 0.3] }}
+        transition={{ duration: 2, repeat: Infinity }}
+        className={`absolute inset-0 rounded-2xl blur-xl ${isBuy ? 'bg-success/20' : 'bg-destructive/20'}`}
+      />
+
+      {/* Pulse rings */}
+      <motion.div
+        initial={{ scale: 0.8, opacity: 0.8 }}
+        animate={{ scale: 1.3, opacity: 0 }}
+        transition={{ duration: 1.5, repeat: Infinity }}
+        className={`absolute inset-0 rounded-2xl border-2 ${isBuy ? 'border-success' : 'border-destructive'}`}
+      />
+
+      <div className="relative">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <motion.div
+              animate={{ rotate: [0, 360] }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+              className={`p-2.5 rounded-xl ${isBuy ? 'bg-success/30' : 'bg-destructive/30'}`}
+            >
+              <Activity className={`w-5 h-5 ${isBuy ? 'text-success' : 'text-destructive'}`} />
+            </motion.div>
+            <div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider">Signal Detected</div>
+              <div className="font-bold text-lg">{signal.symbol}</div>
+            </div>
           </div>
-          <div className={`text-sm font-medium ${signal.change >= 0 ? 'text-success' : 'text-destructive'}`}>
-            {signal.change >= 0 ? '+' : ''}{signal.change.toFixed(2)}%
+          <Badge 
+            className={`text-sm px-3 py-1 ${isBuy ? 'bg-success text-success-foreground' : 'bg-destructive text-destructive-foreground'}`}
+          >
+            {signal.type.toUpperCase()}
+          </Badge>
+        </div>
+
+        {/* Signal details */}
+        <div className="grid grid-cols-3 gap-4 mb-4">
+          <div className="bg-background/30 p-3 rounded-xl">
+            <div className="text-xs text-muted-foreground mb-1">Type</div>
+            <div className="font-medium text-sm flex items-center gap-1">
+              <Zap className="w-3 h-3 text-primary" />
+              {signal.signalType}
+            </div>
           </div>
+          <div className="bg-background/30 p-3 rounded-xl">
+            <div className="text-xs text-muted-foreground mb-1">Price</div>
+            <div className="font-mono font-bold">${signal.price.toFixed(2)}</div>
+          </div>
+          <div className="bg-background/30 p-3 rounded-xl">
+            <div className="text-xs text-muted-foreground mb-1">Confidence</div>
+            <div className="font-bold text-primary">{signal.confidence}%</div>
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div className="relative h-1.5 bg-background/30 rounded-full overflow-hidden">
+          <motion.div
+            initial={{ width: '100%' }}
+            animate={{ width: '0%' }}
+            transition={{ duration: 4, ease: 'linear' }}
+            className={`absolute inset-y-0 left-0 ${isBuy ? 'bg-success' : 'bg-destructive'}`}
+          />
         </div>
       </div>
     </motion.div>
   );
 };
 
-export const LiveDemoSection = () => {
-  const [signals, setSignals] = useState<Signal[]>([]);
+export function LiveDemoSection() {
+  const [stocks, setStocks] = useState(STOCKS);
+  const [activeStockIndex, setActiveStockIndex] = useState<number | null>(null);
+  const [currentSignal, setCurrentSignal] = useState<Signal | null>(null);
   const [totalSignals, setTotalSignals] = useState(0);
-  const [successRate, setSuccessRate] = useState(87);
+  const [successRate, setSuccessRate] = useState(87.3);
 
+  // Auto-rotate through stocks
   useEffect(() => {
-    // Generate initial signals
-    const initial = Array.from({ length: 3 }, generateSignal);
-    setSignals(initial);
-    setTotalSignals(3);
-
-    // Add new signals periodically
     const interval = setInterval(() => {
-      setSignals(prev => {
-        const newSignal = generateSignal();
-        const updated = [newSignal, ...prev].slice(0, 5);
-        return updated;
+      setActiveStockIndex(prev => {
+        const next = prev === null ? 0 : (prev + 1) % stocks.length;
+        
+        // Generate signal for active stock
+        setTimeout(() => {
+          const signal = generateSignal(stocks[next]);
+          setCurrentSignal(signal);
+          setTotalSignals(t => t + 1);
+          setSuccessRate(r => Math.min(95, Math.max(82, r + (Math.random() - 0.3) * 2)));
+        }, 500);
+        
+        return next;
       });
-      setTotalSignals(prev => prev + 1);
-      setSuccessRate(prev => Math.min(95, Math.max(82, prev + (Math.random() - 0.5) * 2)));
-    }, 3000);
+    }, 5000);
+
+    // Start immediately
+    setActiveStockIndex(0);
+    setTimeout(() => {
+      setCurrentSignal(generateSignal(stocks[0]));
+      setTotalSignals(1);
+    }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [stocks]);
 
   return (
-    <section className="relative py-24 overflow-hidden">
+    <section className="py-24 relative overflow-hidden">
       {/* Background effects */}
       <div className="absolute inset-0 bg-gradient-to-b from-background via-primary/5 to-background" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/10 rounded-full blur-3xl" />
-      
-      <div className="container relative mx-auto px-4">
+      <motion.div
+        animate={{ 
+          backgroundPosition: ['0% 0%', '100% 100%'],
+        }}
+        transition={{ duration: 20, repeat: Infinity, repeatType: 'reverse' }}
+        className="absolute inset-0 opacity-30"
+        style={{
+          backgroundImage: 'radial-gradient(circle at center, hsl(var(--primary) / 0.1) 0%, transparent 50%)',
+          backgroundSize: '100% 100%',
+        }}
+      />
+
+      <div className="container mx-auto px-4 relative">
+        {/* Header */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
           className="text-center mb-16"
         >
-          <Badge variant="outline" className="mb-4 border-primary/50 text-primary">
-            <Activity className="w-3 h-3 mr-1" />
-            Live Demo
-          </Badge>
+          <motion.div
+            initial={{ scale: 0 }}
+            whileInView={{ scale: 1 }}
+            viewport={{ once: true }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6"
+          >
+            <motion.div
+              animate={{ scale: [1, 1.2, 1] }}
+              transition={{ duration: 1, repeat: Infinity }}
+              className="w-2 h-2 rounded-full bg-success"
+            />
+            <span className="text-sm font-medium text-primary">Live Market Scanner</span>
+          </motion.div>
+          
           <h2 className="text-4xl md:text-5xl font-bold mb-4">
-            Watch Signals in{' '}
-            <span className="text-gradient">Real-Time</span>
+            Real-Time Signal{' '}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">
+              Detection
+            </span>
           </h2>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            See how our AI detects trading opportunities as they happen. 
-            This is a live simulation of our signal detection system.
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            Watch our AI scan the markets and generate trading signals in real-time
           </p>
         </motion.div>
 
-        <div className="grid lg:grid-cols-2 gap-8 items-start">
-          {/* Stats Panel */}
-          <motion.div
-            initial={{ opacity: 0, x: -30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="space-y-6"
-          >
-            <div className="glass-card p-6 rounded-2xl">
-              <h3 className="text-xl font-semibold mb-6 flex items-center gap-2">
-                <Zap className="w-5 h-5 text-primary" />
-                Signal Statistics
-              </h3>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-background/50 p-4 rounded-xl border border-border/50">
-                  <div className="text-3xl font-bold text-primary mb-1">
-                    <motion.span
-                      key={totalSignals}
-                      initial={{ scale: 1.2 }}
-                      animate={{ scale: 1 }}
-                    >
-                      {totalSignals}
-                    </motion.span>
-                  </div>
-                  <div className="text-sm text-muted-foreground">Signals Today</div>
-                </div>
-                
-                <div className="bg-background/50 p-4 rounded-xl border border-border/50">
-                  <div className="text-3xl font-bold text-success mb-1">
-                    {successRate.toFixed(1)}%
-                  </div>
-                  <div className="text-sm text-muted-foreground">Success Rate</div>
-                </div>
-                
-                <div className="bg-background/50 p-4 rounded-xl border border-border/50">
-                  <div className="text-3xl font-bold text-foreground mb-1">
-                    <Clock className="w-8 h-8 inline" />
-                  </div>
-                  <div className="text-sm text-muted-foreground">Real-Time</div>
-                </div>
-                
-                <div className="bg-background/50 p-4 rounded-xl border border-border/50">
-                  <div className="text-3xl font-bold text-foreground mb-1">
-                    <DollarSign className="w-8 h-8 inline" />
-                  </div>
-                  <div className="text-sm text-muted-foreground">Auto-Execute</div>
+        <div className="grid lg:grid-cols-3 gap-8">
+          {/* Stock Grid */}
+          <div className="lg:col-span-2">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="glass-card p-6 rounded-2xl"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-primary" />
+                  Watchlist Scanner
+                </h3>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Clock className="w-4 h-4" />
+                  <span>Scanning {stocks.length} symbols</span>
                 </div>
               </div>
-            </div>
 
-            {/* How it works mini */}
-            <div className="glass-card p-6 rounded-2xl">
-              <h4 className="font-semibold mb-4">How It Works</h4>
-              <ul className="space-y-3 text-sm text-muted-foreground">
-                <li className="flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-xs flex items-center justify-center mt-0.5">1</span>
-                  <span>AI monitors Bollinger Bands & VWAP indicators</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-xs flex items-center justify-center mt-0.5">2</span>
-                  <span>Detects breakouts and mean reversions</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-xs flex items-center justify-center mt-0.5">3</span>
-                  <span>Automatically executes trades via IBKR</span>
-                </li>
-              </ul>
-            </div>
-          </motion.div>
-
-          {/* Live Signals Feed */}
-          <motion.div
-            initial={{ opacity: 0, x: 30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="glass-card p-6 rounded-2xl"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold flex items-center gap-2">
-                <Activity className="w-5 h-5 text-primary" />
-                Live Signal Feed
-              </h3>
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-success"></span>
-                </span>
-                <span className="text-sm text-muted-foreground">Live</span>
-              </div>
-            </div>
-
-            <div className="space-y-3 min-h-[320px]">
-              <AnimatePresence mode="popLayout">
-                {signals.map((signal, index) => (
-                  <SignalCard key={signal.id} signal={signal} index={index} />
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {stocks.map((stock, index) => (
+                  <StockCard
+                    key={stock.symbol}
+                    stock={stock}
+                    index={index}
+                    isActive={activeStockIndex === index}
+                    onActivate={() => {
+                      setActiveStockIndex(index);
+                      const signal = generateSignal(stock);
+                      setCurrentSignal(signal);
+                      setTotalSignals(t => t + 1);
+                    }}
+                  />
                 ))}
-              </AnimatePresence>
-            </div>
+              </div>
+            </motion.div>
+          </div>
 
-            <div className="mt-6 pt-4 border-t border-border/50 text-center">
-              <p className="text-sm text-muted-foreground mb-3">
-                Ready to automate your trading?
-              </p>
-              <motion.a
-                href="/auth"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="inline-flex items-center gap-2 px-6 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
-              >
-                Start Trading Now
-                <TrendingUp className="w-4 h-4" />
-              </motion.a>
-            </div>
-          </motion.div>
+          {/* Signal Output */}
+          <div className="space-y-6">
+            {/* Active Signal */}
+            <motion.div
+              initial={{ opacity: 0, x: 30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="glass-card p-6 rounded-2xl"
+            >
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Zap className="w-5 h-5 text-primary" />
+                Latest Signal
+              </h3>
+
+              <div className="min-h-[200px]">
+                <AnimatePresence mode="wait">
+                  {currentSignal ? (
+                    <SignalCard 
+                      key={currentSignal.id} 
+                      signal={currentSignal} 
+                      onComplete={() => {}}
+                    />
+                  ) : (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="h-[200px] flex items-center justify-center text-muted-foreground"
+                    >
+                      <div className="text-center">
+                        <Activity className="w-8 h-8 mx-auto mb-2 animate-pulse" />
+                        <p>Scanning for signals...</p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </motion.div>
+
+            {/* Stats */}
+            <motion.div
+              initial={{ opacity: 0, x: 30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
+              className="glass-card p-6 rounded-2xl"
+            >
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Activity className="w-5 h-5 text-primary" />
+                Session Stats
+              </h3>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 bg-background/50 rounded-xl">
+                  <span className="text-muted-foreground">Signals Generated</span>
+                  <motion.span
+                    key={totalSignals}
+                    initial={{ scale: 1.3, color: 'hsl(var(--primary))' }}
+                    animate={{ scale: 1, color: 'hsl(var(--foreground))' }}
+                    className="font-bold text-xl"
+                  >
+                    {totalSignals}
+                  </motion.span>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-background/50 rounded-xl">
+                  <span className="text-muted-foreground">Success Rate</span>
+                  <motion.span
+                    key={successRate.toFixed(1)}
+                    initial={{ scale: 1.1 }}
+                    animate={{ scale: 1 }}
+                    className="font-bold text-xl text-success"
+                  >
+                    {successRate.toFixed(1)}%
+                  </motion.span>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-background/50 rounded-xl">
+                  <span className="text-muted-foreground">Active Symbols</span>
+                  <span className="font-bold text-xl">{stocks.length}</span>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* CTA */}
+            <motion.button
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-full py-4 px-6 bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-xl font-semibold flex items-center justify-center gap-2 shadow-lg shadow-primary/25"
+            >
+              Start Trading Now
+              <ArrowRight className="w-5 h-5" />
+            </motion.button>
+          </div>
         </div>
       </div>
     </section>
   );
-};
+}
