@@ -1,10 +1,26 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+// Secure CORS configuration
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:8080',
+  Deno.env.get('FRONTEND_URL') || '',
+].filter(Boolean);
+
+function getCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin') || '';
+  const isAllowed = allowedOrigins.some(allowed => 
+    origin === allowed || origin.endsWith('.lovable.app') || origin.endsWith('.lovableproject.com')
+  );
+  
+  return {
+    'Access-Control-Allow-Origin': isAllowed ? origin : allowedOrigins[0] || 'http://localhost:3000',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Credentials': 'true',
+  };
+}
 
 // Calculate Bollinger Bands
 function calculateBB(prices: number[], period: number = 20, stdDev: number = 2) {
@@ -37,6 +53,8 @@ function calculateVWAP(bars: { close: number; high: number; low: number; volume:
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+  
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -90,8 +108,17 @@ serve(async (req) => {
 
     // Process each watchlist item
     for (const item of watchlistItems) {
-      // In production, fetch real market data from IBKR
-      // For now, generate mock data
+      // Validate symbol format
+      if (!/^[A-Z]{1,5}$/.test(item.symbol)) {
+        console.log(`Skipping invalid symbol: ${item.symbol}`);
+        continue;
+      }
+
+      // Validate BB parameters
+      const bbPeriod = Math.max(5, Math.min(100, item.bb_period || 20));
+      const bbStdDev = Math.max(0.5, Math.min(5, item.bb_std_dev || 2));
+
+      // Generate mock market data
       const mockBars = [];
       const now = Date.now();
       const basePrice = 150 + Math.random() * 50;
@@ -113,7 +140,7 @@ serve(async (req) => {
       const previousPrice = prices[prices.length - 2];
 
       // Calculate indicators
-      const bb = calculateBB(prices, item.bb_period, item.bb_std_dev);
+      const bb = calculateBB(prices, bbPeriod, bbStdDev);
       const vwap = item.vwap_enabled ? calculateVWAP(mockBars) : null;
 
       if (!bb) continue;
@@ -157,6 +184,12 @@ serve(async (req) => {
         );
 
         for (const rule of matchingRules || []) {
+          // Validate rule parameters
+          const positionSizePercent = Math.max(0.1, Math.min(100, rule.position_size_percent || 5));
+          const maxPositionValue = Math.max(100, Math.min(1000000, rule.max_position_value || 10000));
+          const stopLossPercent = rule.stop_loss_percent ? Math.max(0.1, Math.min(50, rule.stop_loss_percent)) : null;
+          const takeProfitPercent = rule.take_profit_percent ? Math.max(0.1, Math.min(100, rule.take_profit_percent)) : null;
+
           // Create signal
           const { data: signal, error: signalError } = await supabase
             .from('signals')
@@ -196,21 +229,21 @@ serve(async (req) => {
             const side = ['bb_breakout_up', 'bb_mean_reversion_up', 'vwap_cross_up'].includes(signalType)
               ? 'buy' : 'sell';
             
-            const accountValue = 100000; // Mock - would come from IBKR
-            const positionValue = Math.min(
-              userSettings.max_position_size,
-              rule.max_position_value,
-              (accountValue * rule.position_size_percent) / 100
+            const accountValue = 100000; // Mock - would come from broker
+            const maxPositionSize = Math.min(
+              userSettings.max_position_size || 10000,
+              maxPositionValue,
+              (accountValue * positionSizePercent) / 100
             );
-            const quantity = Math.floor(positionValue / currentPrice);
+            const quantity = Math.floor(maxPositionSize / currentPrice);
             
-            if (quantity > 0) {
-              // Calculate stop prices
-              const stopLossPrice = rule.stop_loss_percent
-                ? currentPrice * (1 - (side === 'buy' ? 1 : -1) * rule.stop_loss_percent / 100)
+            if (quantity > 0 && quantity <= 1000000) {
+              // Calculate stop prices with validated percentages
+              const stopLossPrice = stopLossPercent
+                ? currentPrice * (1 - (side === 'buy' ? 1 : -1) * stopLossPercent / 100)
                 : null;
-              const takeProfitPrice = rule.take_profit_percent
-                ? currentPrice * (1 + (side === 'buy' ? 1 : -1) * rule.take_profit_percent / 100)
+              const takeProfitPrice = takeProfitPercent
+                ? currentPrice * (1 + (side === 'buy' ? 1 : -1) * takeProfitPercent / 100)
                 : null;
 
               // Create order
@@ -231,6 +264,7 @@ serve(async (req) => {
                   trailing_stop_percent: rule.trailing_stop_percent,
                   stop_loss_price: stopLossPrice,
                   take_profit_price: takeProfitPrice,
+                  broker: userSettings.preferred_broker || 'ibkr',
                 })
                 .select()
                 .single();
@@ -258,6 +292,7 @@ serve(async (req) => {
                     stop_loss_price: stopLossPrice,
                     take_profit_price: takeProfitPrice,
                     is_open: true,
+                    broker: userSettings.preferred_broker || 'ibkr',
                   });
 
                 console.log(`Auto-executed: ${side} ${quantity} ${item.symbol} @ ${currentPrice.toFixed(2)}`);
@@ -283,7 +318,7 @@ serve(async (req) => {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
       JSON.stringify({ error: message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
     );
   }
 });

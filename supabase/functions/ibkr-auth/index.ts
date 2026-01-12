@@ -1,10 +1,32 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+// Secure CORS configuration
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:8080',
+  Deno.env.get('FRONTEND_URL') || '',
+].filter(Boolean);
+
+function getCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin') || '';
+  const isAllowed = allowedOrigins.some(allowed => 
+    origin === allowed || origin.endsWith('.lovable.app') || origin.endsWith('.lovableproject.com')
+  );
+  
+  return {
+    'Access-Control-Allow-Origin': isAllowed ? origin : allowedOrigins[0] || 'http://localhost:3000',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Credentials': 'true',
+  };
+}
+
+// Validate action input
+function validateAction(action: unknown): action is 'authenticate' | 'logout' | 'check-session' | 'callback' {
+  return typeof action === 'string' && 
+    ['authenticate', 'logout', 'check-session', 'callback'].includes(action);
+}
 
 interface AuthRequest {
   action: 'authenticate' | 'logout' | 'check-session' | 'callback';
@@ -12,6 +34,8 @@ interface AuthRequest {
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+  
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -41,15 +65,22 @@ serve(async (req) => {
       );
     }
 
-    const { action, code }: AuthRequest = await req.json();
+    const body = await req.json();
+    
+    // Validate action
+    if (!validateAction(body.action)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid action. Must be one of: authenticate, logout, check-session, callback' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    const { action, code }: AuthRequest = body;
     console.log(`IBKR Auth action: ${action} for user: ${user.id}`);
 
     switch (action) {
       case 'authenticate': {
         // IBKR Client Portal API authentication flow
-        // In production, you would redirect to IBKR's OAuth endpoint
-        // For now, we'll return a mock auth URL that the user would use
-        
         const baseUrl = Deno.env.get('IBKR_BASE_URL') || 'https://localhost:5000';
         const authUrl = `${baseUrl}/v1/api/iserver/auth/status`;
         
@@ -99,10 +130,6 @@ serve(async (req) => {
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
-
-        // In production, you would make a request to IBKR to verify the session
-        // const baseUrl = Deno.env.get('IBKR_BASE_URL') || 'https://localhost:5000';
-        // const response = await fetch(`${baseUrl}/v1/api/iserver/auth/status`);
         
         return new Response(
           JSON.stringify({
@@ -116,15 +143,12 @@ serve(async (req) => {
 
       case 'callback': {
         // Handle OAuth callback from IBKR
-        if (!code) {
+        if (!code || typeof code !== 'string' || code.length > 1000) {
           return new Response(
-            JSON.stringify({ error: 'No authorization code provided' }),
+            JSON.stringify({ error: 'Invalid authorization code' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
-
-        // Exchange code for tokens (mock implementation)
-        // In production, you would exchange the code with IBKR
         
         await supabase
           .from('ibkr_sessions')
@@ -170,7 +194,7 @@ serve(async (req) => {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
       JSON.stringify({ error: message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
     );
   }
 });
