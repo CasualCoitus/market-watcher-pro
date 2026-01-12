@@ -1,1 +1,16 @@
 project_id = "ddzpnvhkotftnbvmtdzo"
+
+[functions.ibkr-auth]
+verify_jwt = false
+
+[functions.ibkr-market-data]
+verify_jwt = false
+
+[functions.ibkr-orders]
+verify_jwt = false
+
+[functions.signal-scanner]
+verify_jwt = false
+
+[functions.auto-invest]
+verify_jwt = false
