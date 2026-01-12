@@ -184,10 +184,88 @@ serve(async (req) => {
           signalsGenerated.push(signal);
           console.log(`Signal generated: ${signalType} for ${item.symbol}`);
 
-          // Auto-execute if enabled
-          // This would call the ibkr-orders function
-          // For now, just log
-          console.log(`Would execute: ${rule.option_strategy} for ${item.symbol}`);
+          // Get user's trading settings for risk checks
+          const { data: userSettings } = await supabase
+            .from('trading_settings')
+            .select('*')
+            .eq('user_id', item.user_id)
+            .single();
+
+          if (userSettings?.auto_trade_enabled) {
+            // Calculate order parameters
+            const side = ['bb_breakout_up', 'bb_mean_reversion_up', 'vwap_cross_up'].includes(signalType)
+              ? 'buy' : 'sell';
+            
+            const accountValue = 100000; // Mock - would come from IBKR
+            const positionValue = Math.min(
+              userSettings.max_position_size,
+              rule.max_position_value,
+              (accountValue * rule.position_size_percent) / 100
+            );
+            const quantity = Math.floor(positionValue / currentPrice);
+            
+            if (quantity > 0) {
+              // Calculate stop prices
+              const stopLossPrice = rule.stop_loss_percent
+                ? currentPrice * (1 - (side === 'buy' ? 1 : -1) * rule.stop_loss_percent / 100)
+                : null;
+              const takeProfitPrice = rule.take_profit_percent
+                ? currentPrice * (1 + (side === 'buy' ? 1 : -1) * rule.take_profit_percent / 100)
+                : null;
+
+              // Create order
+              const ibkrOrderId = `SCAN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+              
+              const { data: order, error: orderError } = await supabase
+                .from('orders')
+                .insert({
+                  user_id: item.user_id,
+                  signal_id: signal.id,
+                  ibkr_order_id: ibkrOrderId,
+                  symbol: item.symbol,
+                  side,
+                  quantity,
+                  limit_price: currentPrice,
+                  status: 'submitted',
+                  strategy: rule.option_strategy,
+                  trailing_stop_percent: rule.trailing_stop_percent,
+                  stop_loss_price: stopLossPrice,
+                  take_profit_price: takeProfitPrice,
+                })
+                .select()
+                .single();
+
+              if (!orderError && order) {
+                // Mark signal as executed
+                await supabase
+                  .from('signals')
+                  .update({ executed: true })
+                  .eq('id', signal.id);
+
+                // Create position
+                await supabase
+                  .from('positions')
+                  .insert({
+                    user_id: item.user_id,
+                    order_id: order.id,
+                    symbol: item.symbol,
+                    quantity: side === 'buy' ? quantity : -quantity,
+                    avg_cost: currentPrice,
+                    current_price: currentPrice,
+                    trailing_stop_price: rule.trailing_stop_percent
+                      ? currentPrice * (1 - rule.trailing_stop_percent / 100)
+                      : null,
+                    stop_loss_price: stopLossPrice,
+                    take_profit_price: takeProfitPrice,
+                    is_open: true,
+                  });
+
+                console.log(`Auto-executed: ${side} ${quantity} ${item.symbol} @ ${currentPrice.toFixed(2)}`);
+              }
+            }
+          } else {
+            console.log(`Signal ready for manual execution: ${rule.option_strategy} for ${item.symbol}`);
+          }
         }
       }
     }
