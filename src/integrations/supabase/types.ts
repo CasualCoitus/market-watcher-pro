@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      broker_sessions: {
+        Row: {
+          account_id: string | null
+          broker: Database["public"]["Enums"]["broker_type"]
+          created_at: string | null
+          credentials_encrypted: string | null
+          id: string
+          is_authenticated: boolean | null
+          last_authenticated: string | null
+          refresh_token: string | null
+          session_token: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          broker: Database["public"]["Enums"]["broker_type"]
+          created_at?: string | null
+          credentials_encrypted?: string | null
+          id?: string
+          is_authenticated?: boolean | null
+          last_authenticated?: string | null
+          refresh_token?: string | null
+          session_token?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          account_id?: string | null
+          broker?: Database["public"]["Enums"]["broker_type"]
+          created_at?: string | null
+          credentials_encrypted?: string | null
+          id?: string
+          is_authenticated?: boolean | null
+          last_authenticated?: string | null
+          refresh_token?: string | null
+          session_token?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       ibkr_sessions: {
         Row: {
           account_id: string | null
@@ -49,6 +91,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          broker: Database["public"]["Enums"]["broker_type"] | null
           created_at: string | null
           expiry: string | null
           filled_at: string | null
@@ -71,6 +114,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          broker?: Database["public"]["Enums"]["broker_type"] | null
           created_at?: string | null
           expiry?: string | null
           filled_at?: string | null
@@ -93,6 +137,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          broker?: Database["public"]["Enums"]["broker_type"] | null
           created_at?: string | null
           expiry?: string | null
           filled_at?: string | null
@@ -127,6 +172,7 @@ export type Database = {
       positions: {
         Row: {
           avg_cost: number
+          broker: Database["public"]["Enums"]["broker_type"] | null
           closed_at: string | null
           current_price: number | null
           expiry: string | null
@@ -146,6 +192,7 @@ export type Database = {
         }
         Insert: {
           avg_cost: number
+          broker?: Database["public"]["Enums"]["broker_type"] | null
           closed_at?: string | null
           current_price?: number | null
           expiry?: string | null
@@ -165,6 +212,7 @@ export type Database = {
         }
         Update: {
           avg_cost?: number
+          broker?: Database["public"]["Enums"]["broker_type"] | null
           closed_at?: string | null
           current_price?: number | null
           expiry?: string | null
@@ -320,6 +368,7 @@ export type Database = {
           max_daily_loss: number | null
           max_daily_trades: number | null
           max_position_size: number | null
+          preferred_broker: Database["public"]["Enums"]["broker_type"] | null
           trading_hours_end: string | null
           trading_hours_start: string | null
           updated_at: string | null
@@ -332,6 +381,7 @@ export type Database = {
           max_daily_loss?: number | null
           max_daily_trades?: number | null
           max_position_size?: number | null
+          preferred_broker?: Database["public"]["Enums"]["broker_type"] | null
           trading_hours_end?: string | null
           trading_hours_start?: string | null
           updated_at?: string | null
@@ -344,6 +394,7 @@ export type Database = {
           max_daily_loss?: number | null
           max_daily_trades?: number | null
           max_position_size?: number | null
+          preferred_broker?: Database["public"]["Enums"]["broker_type"] | null
           trading_hours_end?: string | null
           trading_hours_start?: string | null
           updated_at?: string | null
@@ -395,6 +446,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
+      broker_type: "ibkr" | "public" | "tastytrade"
       option_strategy:
         | "buy_call"
         | "buy_put"
@@ -549,6 +601,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      broker_type: ["ibkr", "public", "tastytrade"],
       option_strategy: [
         "buy_call",
         "buy_put",
