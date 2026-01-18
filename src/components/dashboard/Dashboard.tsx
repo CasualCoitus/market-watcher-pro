@@ -7,11 +7,13 @@ import { OrdersPanel } from './OrdersPanel';
 import { SignalRulesPanel } from './SignalRulesPanel';
 import { PriceChart } from './PriceChart';
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
+import { ChooseIndicatorsDialog } from './ChooseIndicatorsDialog';
 import { useWatchlist } from '@/hooks/useWatchlist';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export function Dashboard() {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [indicatorsOpen, setIndicatorsOpen] = useState(false);
   const { watchlist } = useWatchlist();
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
 
@@ -21,7 +23,10 @@ export function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header onSettingsClick={() => setSettingsOpen(true)} />
+      <Header
+        onSettingsClick={() => setSettingsOpen(true)}
+        onIndicatorsClick={() => setIndicatorsOpen(true)}
+      />
       
       <main className="container mx-auto px-4 py-6">
         {/* Price Chart Section */}
@@ -80,6 +85,7 @@ export function Dashboard() {
       </main>
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <ChooseIndicatorsDialog open={indicatorsOpen} onOpenChange={setIndicatorsOpen} />
     </div>
   );
 }

@@ -3,21 +3,23 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { useIBKR } from '@/hooks/useIBKR';
 import { useTradingSettings } from '@/hooks/useTradingSettings';
-import { 
-  TrendingUp, 
-  LogOut, 
-  Settings, 
-  Wifi, 
-  WifiOff, 
+import {
+  TrendingUp,
+  LogOut,
+  Settings,
+  Wifi,
+  WifiOff,
   Power,
-  PowerOff
+  PowerOff,
+  BarChart3
 } from 'lucide-react';
 
 interface HeaderProps {
   onSettingsClick: () => void;
+  onIndicatorsClick: () => void;
 }
 
-export function Header({ onSettingsClick }: HeaderProps) {
+export function Header({ onSettingsClick, onIndicatorsClick }: HeaderProps) {
   const { user, signOut } = useAuth();
   const { isAuthenticated, accountId, authenticate, logout, checkSession } = useIBKR();
   const { settings } = useTradingSettings();
@@ -82,10 +84,14 @@ export function Header({ onSettingsClick }: HeaderProps) {
               )}
             </Button>
             
+            <Button variant="ghost" size="icon" onClick={onIndicatorsClick}>
+              <BarChart3 className="h-5 w-5" />
+            </Button>
+
             <Button variant="ghost" size="icon" onClick={onSettingsClick}>
               <Settings className="h-5 w-5" />
             </Button>
-            
+
             <Button variant="ghost" size="icon" onClick={() => signOut()}>
               <LogOut className="h-5 w-5" />
             </Button>
